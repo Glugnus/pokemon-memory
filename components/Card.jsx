@@ -19,7 +19,16 @@ const CARD_WIDTH =
 const CARD_HEIGHT =
   (SCREEN_HEIGHT - MARGIN_VERTICAL * 2 - SPACE_BETWEEN_CARDS * 3) / 4;
 
-export default function Card({ index, shouldDistribute }) {
+export default function Card({
+  index,
+  shouldDistribute,
+  card,
+  onPressCard,
+  isFlipped,
+  isCleared,
+  shouldRestart,
+  setShouldRestart,
+}) {
   const animatedLeft = useRef(
     new Animated.Value(SCREEN_WIDTH / 2 - CARD_WIDTH / 2),
   ).current;
@@ -27,6 +36,10 @@ export default function Card({ index, shouldDistribute }) {
   const animatedTop = useRef(
     new Animated.Value(SCREEN_HEIGHT / 2 - CARD_HEIGHT / 2),
   ).current;
+
+  const animatedRotation = useRef(new Animated.Value(0)).current;
+
+  const animatedOpacity = useRef(new Animated.Value(1)).current;
 
   const distribute = () => {
     Animated.parallel([
@@ -54,12 +67,62 @@ export default function Card({ index, shouldDistribute }) {
         delay: index * 100,
         useNativeDriver: true,
       }),
-    ]).start();
+    ]).start(() => setShouldRestart(false));
   };
 
   useEffect(() => {
     if (shouldDistribute) distribute();
   }, [shouldDistribute]);
+
+  const initPosition = () => {
+    animatedLeft.setValue(-SCREEN_WIDTH / 2);
+    animatedTop.setValue(SCREEN_HEIGHT / 2 - CARD_HEIGHT / 2);
+    animatedOpacity.setValue(1);
+    animatedRotation.setValue(0);
+    distribute();
+  };
+
+  useEffect(() => {
+    if (shouldRestart) {
+      initPosition();
+    }
+  }, [shouldRestart]);
+
+  useEffect(() => {
+    if (isCleared) {
+      Animated.timing(animatedOpacity, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }).start();
+    } else if (isFlipped) {
+      Animated.timing(animatedRotation, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(animatedRotation, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [isFlipped, isCleared]);
+
+  const flipCard = () => {
+    if (!isCleared && !isFlipped) onPressCard(card);
+  };
+
+  const spin = animatedRotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "180deg"],
+  });
+  const reverseSpin = animatedRotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["180deg", "0deg"],
+  });
+
   return (
     <Animated.View
       style={[
@@ -69,15 +132,32 @@ export default function Card({ index, shouldDistribute }) {
             { translateX: animatedLeft },
             { translateY: animatedTop },
           ],
+          opacity: animatedOpacity,
         },
       ]}
     >
-      <Pressable style={styles.cardContainer}>
-        <Image
-          style={styles.card}
-          resizeMode="contain"
-          source={require("../assets/pokeball.png")}
-        />
+      <Pressable style={styles.cardContainer} onPress={flipCard}>
+        <Animated.View
+          style={[
+            styles.card,
+            styles.frontCard,
+            { transform: [{ rotateY: reverseSpin }, { perspective: 1000 }] },
+          ]}
+        >
+          <Image style={styles.image} source={card.source} />
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.card,
+            styles.backCard,
+            { transform: [{ rotateY: spin }, { perspective: 1000 }] },
+          ]}
+        >
+          <Image
+            style={styles.image}
+            source={require("../assets/pokeball.png")}
+          />
+        </Animated.View>
       </Pressable>
     </Animated.View>
   );
@@ -97,6 +177,18 @@ const styles = StyleSheet.create({
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
     borderRadius: 8,
+    position: "absolute",
+    backfaceVisibility: "hidden",
+  },
+  frontCard: {
+    backgroundColor: "coral",
+  },
+  backCard: {
     backgroundColor: "powderblue",
+  },
+  image: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    resizeMode: "contain",
   },
 });
